@@ -21,6 +21,7 @@ public class GUI extends JFrame {
     private static final Color WARNING_COLOR = new Color(255, 193, 7);
     private static final Color DANGER_COLOR = new Color(220, 53, 69);
     private static final Color TEXT_COLOR = new Color(33, 37, 41);
+    private static final Color LIGHT_GRAY = new Color(248, 249, 250);
 
     // フォント
     private static final Font TITLE_FONT = new Font("Arial", Font.BOLD, 28);
@@ -35,6 +36,12 @@ public class GUI extends JFrame {
     private JButton trainButton;
     private JProgressBar progressBar;
     private JLabel statusLabel;
+    private JLabel epochLabel;
+    private JLabel lossLabel;
+    private JTextArea historyArea;
+
+    // 学習設定
+    private static final int epochs = 10;
 
     // コントローラー
     private TrainingController trainingController;
@@ -51,7 +58,7 @@ public class GUI extends JFrame {
     }
 
     private void initializeComponents() {
-        trainingController = new TrainingController(10, 32, 0.001, true);
+        trainingController = new TrainingController(epochs, 32, 0.001, true);
         trainingController.setListener(new TrainingController.TrainingListener() {
             @Override
             public void onStatusChanged(String status) {
@@ -65,7 +72,14 @@ public class GUI extends JFrame {
 
             @Override
             public void onEpochCompleted(int epoch, double loss) {
-                // シンプルに保つため、詳細な統計は省略
+                // 統計タブに情報を更新
+                epochLabel.setText("Epoch: " + epoch + " / " + epochs);
+                lossLabel.setText(String.format("Loss: %.4f", loss));
+
+                // 履歴に追加
+                String history = String.format("Epoch %d: Loss = %.4f\n", epoch, loss);
+                historyArea.append(history);
+                historyArea.setCaretPosition(historyArea.getDocument().getLength());
             }
 
             @Override
@@ -76,7 +90,6 @@ public class GUI extends JFrame {
             @Override
             public void onTrainingCompleted() {
                 trainButton.setText("Train Model");
-                trainButton.setIcon(createIcon("▶", SUCCESS_COLOR));
                 progressBar.setValue(0);
                 statusLabel.setText("Training completed!");
             }
@@ -116,7 +129,7 @@ public class GUI extends JFrame {
         titleLabel.setForeground(Color.WHITE);
         header.add(titleLabel, BorderLayout.WEST);
 
-        trainButton = createStyledButton("Train Model", createIcon("▶", Color.WHITE));
+        trainButton = createStyledButton("Train Model", null);
         trainButton.setBackground(SUCCESS_COLOR);
         trainButton.addActionListener(e -> toggleTraining());
         header.add(trainButton, BorderLayout.EAST);
@@ -140,12 +153,28 @@ public class GUI extends JFrame {
         gbc.weighty = 1.0;
         content.add(createDrawingCard(), gbc);
 
-        // 予測結果パネル（右側）
+        // 右側：タブパネル
         gbc.gridx = 1;
         gbc.gridy = 0;
-        content.add(createPredictionCard(), gbc);
+        content.add(createTabbedPanel(), gbc);
 
         return content;
+    }
+
+    private JTabbedPane createTabbedPanel() {
+        JTabbedPane tabbedPane = new JTabbedPane();
+        tabbedPane.setBackground(CARD_COLOR);
+        tabbedPane.setFont(LABEL_FONT);
+
+        // 予測タブ
+        JPanel predictionTab = createPredictionCard();
+        tabbedPane.addTab("Prediction", predictionTab);
+
+        // 統計タブ
+        JPanel statisticsTab = createStatisticsCard();
+        tabbedPane.addTab("Statistics", statisticsTab);
+
+        return tabbedPane;
     }
 
     private JPanel createDrawingCard() {
@@ -166,7 +195,7 @@ public class GUI extends JFrame {
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
         buttonPanel.setBackground(CARD_COLOR);
 
-        clearButton = createStyledButton("Clear", createIcon("✕", DANGER_COLOR));
+        clearButton = createStyledButton("Clear", null);
         clearButton.setBackground(CARD_COLOR);
         clearButton.setForeground(DANGER_COLOR);
         clearButton.setBorder(BorderFactory.createLineBorder(DANGER_COLOR, 2));
@@ -175,7 +204,7 @@ public class GUI extends JFrame {
             predictionDisplay.clear();
         });
 
-        JButton generateButton = createStyledButton("Random", createIcon("↻", PRIMARY_COLOR));
+        JButton generateButton = createStyledButton("Random", null);
         generateButton.setBackground(CARD_COLOR);
         generateButton.setForeground(PRIMARY_COLOR);
         generateButton.setBorder(BorderFactory.createLineBorder(PRIMARY_COLOR, 2));
@@ -190,11 +219,67 @@ public class GUI extends JFrame {
     }
 
     private JPanel createPredictionCard() {
-        JPanel card = createCard("Prediction");
+        JPanel card = new JPanel();
+        card.setBackground(CARD_COLOR);
+        card.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         card.setLayout(new BorderLayout());
 
         predictionDisplay = new Display();
         card.add(predictionDisplay, BorderLayout.CENTER);
+
+        return card;
+    }
+
+    private JPanel createStatisticsCard() {
+        JPanel card = new JPanel();
+        card.setBackground(CARD_COLOR);
+        card.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        card.setLayout(new BorderLayout());
+
+        // 統計表示パネル
+        JPanel statsPanel = new JPanel();
+        statsPanel.setLayout(new BoxLayout(statsPanel, BoxLayout.Y_AXIS));
+        statsPanel.setBackground(CARD_COLOR);
+
+        // 学習状況
+        JLabel trainingStatusLabel = new JLabel("Training Status");
+        trainingStatusLabel.setFont(SUBTITLE_FONT);
+        trainingStatusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        trainingStatusLabel.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
+        statsPanel.add(trainingStatusLabel);
+
+        // エポック情報
+        epochLabel = new JLabel("Epoch: 0 / " + epochs);
+        epochLabel.setFont(LABEL_FONT);
+        epochLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        statsPanel.add(epochLabel);
+
+        // 損失情報
+        lossLabel = new JLabel("Loss: -");
+        lossLabel.setFont(LABEL_FONT);
+        lossLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        statsPanel.add(lossLabel);
+
+        statsPanel.add(Box.createVerticalStrut(20));
+
+        // 学習履歴
+        JLabel historyLabel = new JLabel("Training History");
+        historyLabel.setFont(SUBTITLE_FONT);
+        historyLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        historyLabel.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
+        statsPanel.add(historyLabel);
+
+        // 履歴表示エリア
+        historyArea = new JTextArea(10, 30);
+        historyArea.setEditable(false);
+        historyArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        historyArea.setBackground(LIGHT_GRAY);
+
+        JScrollPane scrollPane = new JScrollPane(historyArea);
+        scrollPane.setAlignmentX(Component.LEFT_ALIGNMENT);
+        statsPanel.add(scrollPane);
+
+        card.add(statsPanel, BorderLayout.NORTH);
 
         return card;
     }
@@ -265,25 +350,6 @@ public class GUI extends JFrame {
         return button;
     }
 
-    private Icon createIcon(String text, Color color) {
-        return new Icon() {
-            @Override
-            public void paintIcon(Component c, Graphics g, int x, int y) {
-                Graphics2D g2 = (Graphics2D) g;
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(color);
-                g2.setFont(new Font("Arial", Font.BOLD, 16));
-                g2.drawString(text, x, y + 12);
-            }
-
-            @Override
-            public int getIconWidth() { return 20; }
-
-            @Override
-            public int getIconHeight() { return 16; }
-        };
-    }
-
     private void onDrawingChanged() {
         if (!drawingPanel.hasDrawing()) return;
 
@@ -306,11 +372,9 @@ public class GUI extends JFrame {
         if (trainingController.isTraining()) {
             trainingController.stopTraining();
             trainButton.setText("Train Model");
-            trainButton.setIcon(createIcon("▶", Color.WHITE));
         } else {
             trainingController.startTraining();
             trainButton.setText("Stop Training");
-            trainButton.setIcon(createIcon("■", Color.WHITE));
         }
     }
 

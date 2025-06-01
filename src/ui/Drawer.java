@@ -134,7 +134,8 @@ public class Drawer extends JPanel {
 
         for (int y = 0; y < image.length; y++) {
             for (int x = 0; x < image[0].length; x++) {
-                int intensity = (int)(255 * image[y][x]);
+                // 値を反転（0->白、1->黒）
+                int intensity = (int)(255 * (1 - image[y][x]));
                 g2d.setColor(new Color(intensity, intensity, intensity));
                 g2d.fillRect(x * scale, y * scale, scale, scale);
             }

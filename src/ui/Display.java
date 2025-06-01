@@ -3,9 +3,6 @@ package ui;
 import javax.swing.*;
 import java.awt.*;
 
-/**
- * モダンでシンプルな予測結果表示パネル
- */
 public class Display extends JPanel {
 
     // カラー
