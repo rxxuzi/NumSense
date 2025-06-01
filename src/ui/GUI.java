@@ -2,352 +2,341 @@ package ui;
 
 import main.CNN;
 import data.MINIST;
-
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.*;
+import javax.swing.border.*;
 
 /**
- * リファクタリングされたCNN手書き数字認識GUI
- * コンポーネントを分離してモジュール化
+ * モダンでシンプルなCNN手書き数字認識GUI
  */
-public class GUI extends JFrame implements TrainingController.TrainingListener {
+public class GUI extends JFrame {
 
-    // UIコンポーネント
-    private DrawingPanel drawingPanel;
-    private PredictionPanel predictionPanel;
+    // カラーパレット
+    private static final Color BACKGROUND_COLOR = new Color(248, 249, 250);
+    private static final Color CARD_COLOR = Color.WHITE;
+    private static final Color PRIMARY_COLOR = new Color(74, 101, 255);
+    private static final Color SECONDARY_COLOR = new Color(108, 117, 125);
+    private static final Color SUCCESS_COLOR = new Color(40, 167, 69);
+    private static final Color WARNING_COLOR = new Color(255, 193, 7);
+    private static final Color DANGER_COLOR = new Color(220, 53, 69);
+    private static final Color TEXT_COLOR = new Color(33, 37, 41);
+
+    // フォント
+    private static final Font TITLE_FONT = new Font("Arial", Font.BOLD, 28);
+    private static final Font SUBTITLE_FONT = new Font("Arial", Font.PLAIN, 16);
+    private static final Font BUTTON_FONT = new Font("Arial", Font.BOLD, 14);
+    private static final Font LABEL_FONT = new Font("Arial", Font.PLAIN, 14);
+
+    // コンポーネント
+    private Drawer drawingPanel;
+    private Display predictionDisplay;
     private JButton clearButton;
-    private JButton generateButton;
     private JButton trainButton;
-    private JButton evaluateButton;
     private JProgressBar progressBar;
     private JLabel statusLabel;
 
-    // コントローラーとデータ生成器
+    // コントローラー
     private TrainingController trainingController;
     private MINIST dataGenerator;
 
-    // 学習設定
-    private static final int EPOCHS = 20;
-    private static final int BATCH_SIZE = 32;
-    private static final double INITIAL_LEARNING_RATE = 0.001;
-    private static final boolean USE_DATA_AUGMENTATION = true;
-
     public GUI() {
-        super("Jeeplearning - CNN Digit Recognition");
+        super("Digit Recognition");
         initializeComponents();
-        initializeUI();
+        setupUI();
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1200, 800);
+        setSize(900, 650);
         setLocationRelativeTo(null);
+        setBackground(BACKGROUND_COLOR);
     }
 
-    /**
-     * コンポーネントの初期化
-     */
     private void initializeComponents() {
-        // 学習コントローラーの初期化
-        trainingController = new TrainingController(
-                EPOCHS, BATCH_SIZE, INITIAL_LEARNING_RATE, USE_DATA_AUGMENTATION
-        );
-        trainingController.setListener(this);
+        trainingController = new TrainingController(10, 32, 0.001, true);
+        trainingController.setListener(new TrainingController.TrainingListener() {
+            @Override
+            public void onStatusChanged(String status) {
+                statusLabel.setText(status);
+            }
 
-        // データ生成器
+            @Override
+            public void onProgressChanged(int progress) {
+                progressBar.setValue(progress);
+            }
+
+            @Override
+            public void onEpochCompleted(int epoch, double loss) {
+                // シンプルに保つため、詳細な統計は省略
+            }
+
+            @Override
+            public void onAccuracyUpdated(double accuracy) {
+                predictionDisplay.updateAccuracy(accuracy);
+            }
+
+            @Override
+            public void onTrainingCompleted() {
+                trainButton.setText("Train Model");
+                trainButton.setIcon(createIcon("▶", SUCCESS_COLOR));
+                progressBar.setValue(0);
+                statusLabel.setText("Training completed!");
+            }
+
+            @Override
+            public void onError(String error) {
+                JOptionPane.showMessageDialog(GUI.this, error, "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+
         dataGenerator = new MINIST();
     }
 
-    /**
-     * UIの初期化
-     */
-    private void initializeUI() {
+    private void setupUI() {
         setLayout(new BorderLayout());
+        getContentPane().setBackground(BACKGROUND_COLOR);
 
-        // メインパネル（左右分割）
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        splitPane.setDividerLocation(450);
-        splitPane.setResizeWeight(0.4);
+        // ヘッダー
+        add(createHeader(), BorderLayout.NORTH);
 
-        // 左側：描画エリア
-        JPanel leftPanel = createLeftPanel();
-        splitPane.setLeftComponent(leftPanel);
+        // メインコンテンツ
+        add(createMainContent(), BorderLayout.CENTER);
 
-        // 右側：予測結果エリア
-        JPanel rightPanel = createRightPanel();
-        splitPane.setRightComponent(rightPanel);
-
-        add(splitPane, BorderLayout.CENTER);
-
-        // 下部：ステータスバー
-        JPanel statusPanel = createStatusPanel();
-        add(statusPanel, BorderLayout.SOUTH);
+        // フッター
+        add(createFooter(), BorderLayout.SOUTH);
     }
 
-    /**
-     * 左側パネルの作成（描画エリア）
-     */
-    private JPanel createLeftPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createTitledBorder("Draw a Digit"));
+    private JPanel createHeader() {
+        JPanel header = new JPanel();
+        header.setBackground(PRIMARY_COLOR);
+        header.setPreferredSize(new Dimension(getWidth(), 80));
+        header.setLayout(new BorderLayout());
+        header.setBorder(BorderFactory.createEmptyBorder(20, 30, 20, 30));
 
-        // 使い方の説明
-        JPanel instructionPanel = new JPanel(new BorderLayout());
-        instructionPanel.setBackground(new Color(240, 240, 240));
-        instructionPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        JLabel titleLabel = new JLabel("Digit Recognition");
+        titleLabel.setFont(TITLE_FONT);
+        titleLabel.setForeground(Color.WHITE);
+        header.add(titleLabel, BorderLayout.WEST);
 
-        JTextArea instructions = new JTextArea(
-                "Instructions:\n" +
-                        "• Draw a digit (0-9) with your mouse\n" +
-                        "• The model will predict in real-time\n" +
-                        "• Click 'Clear' to erase and start over\n" +
-                        "• Click 'Generate Sample' to see examples"
-        );
-        instructions.setEditable(false);
-        instructions.setBackground(instructionPanel.getBackground());
-        instructions.setFont(new Font("Arial", Font.PLAIN, 12));
-        instructionPanel.add(instructions, BorderLayout.CENTER);
+        trainButton = createStyledButton("Train Model", createIcon("▶", Color.WHITE));
+        trainButton.setBackground(SUCCESS_COLOR);
+        trainButton.addActionListener(e -> toggleTraining());
+        header.add(trainButton, BorderLayout.EAST);
 
-        panel.add(instructionPanel, BorderLayout.NORTH);
+        return header;
+    }
 
-        // 描画パネル
-        JPanel centerPanel = new JPanel(new GridBagLayout());
-        centerPanel.setBackground(Color.WHITE);
-
-        drawingPanel = new DrawingPanel();
-        drawingPanel.addDrawingListener(this::onDrawingChanged);
+    private JPanel createMainContent() {
+        JPanel content = new JPanel(new GridBagLayout());
+        content.setBackground(BACKGROUND_COLOR);
+        content.setBorder(BorderFactory.createEmptyBorder(30, 30, 30, 30));
 
         GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.insets = new Insets(10, 10, 10, 10);
+
+        // 描画パネル（左側）
         gbc.gridx = 0;
         gbc.gridy = 0;
-        centerPanel.add(drawingPanel, gbc);
+        gbc.weightx = 0.5;
+        gbc.weighty = 1.0;
+        content.add(createDrawingCard(), gbc);
 
-        panel.add(centerPanel, BorderLayout.CENTER);
+        // 予測結果パネル（右側）
+        gbc.gridx = 1;
+        gbc.gridy = 0;
+        content.add(createPredictionCard(), gbc);
 
-        // ボタンパネル
-        JPanel buttonPanel = new JPanel(new FlowLayout());
-
-        clearButton = new JButton("Clear");
-        clearButton.setIcon(UIManager.getIcon("Table.ascendingSortIcon"));
-        clearButton.addActionListener(e -> {
-            drawingPanel.clear();
-            predictionPanel.clearPrediction();
-        });
-        buttonPanel.add(clearButton);
-
-        generateButton = new JButton("Generate Sample");
-        generateButton.setIcon(UIManager.getIcon("FileView.floppyDriveIcon"));
-        generateButton.addActionListener(e -> generateSampleDigit());
-        buttonPanel.add(generateButton);
-
-        panel.add(buttonPanel, BorderLayout.SOUTH);
-
-        return panel;
+        return content;
     }
 
-    /**
-     * 右側パネルの作成（予測結果と統計）
-     */
-    private JPanel createRightPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createTitledBorder("Prediction & Statistics"));
+    private JPanel createDrawingCard() {
+        JPanel card = createCard("Draw a Digit");
+        card.setLayout(new BorderLayout());
 
-        // 予測結果パネル
-        predictionPanel = new PredictionPanel();
-        panel.add(predictionPanel, BorderLayout.CENTER);
+        // 描画パネル
+        drawingPanel = new Drawer();
+        drawingPanel.addDrawingListener(() -> onDrawingChanged());
 
-        // コントロールパネル
-        JPanel controlPanel = createControlPanel();
-        panel.add(controlPanel, BorderLayout.SOUTH);
+        JPanel drawingContainer = new JPanel(new GridBagLayout());
+        drawingContainer.setBackground(CARD_COLOR);
+        drawingContainer.add(drawingPanel);
 
-        return panel;
-    }
-
-    /**
-     * コントロールパネルの作成
-     */
-    private JPanel createControlPanel() {
-        JPanel panel = new JPanel();
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
-        // 学習設定の表示
-        JPanel settingsPanel = new JPanel(new GridLayout(4, 2, 5, 5));
-        settingsPanel.setBorder(BorderFactory.createTitledBorder("Training Settings"));
-        settingsPanel.setMaximumSize(new Dimension(300, 120));
-
-        settingsPanel.add(new JLabel("Epochs:"));
-        settingsPanel.add(new JLabel(String.valueOf(EPOCHS)));
-
-        settingsPanel.add(new JLabel("Batch Size:"));
-        settingsPanel.add(new JLabel(String.valueOf(BATCH_SIZE)));
-
-        settingsPanel.add(new JLabel("Learning Rate:"));
-        settingsPanel.add(new JLabel(String.valueOf(INITIAL_LEARNING_RATE)));
-
-        settingsPanel.add(new JLabel("Data Augmentation:"));
-        settingsPanel.add(new JLabel(USE_DATA_AUGMENTATION ? "Enabled" : "Disabled"));
-
-        panel.add(settingsPanel);
-        panel.add(Box.createVerticalStrut(15));
+        card.add(drawingContainer, BorderLayout.CENTER);
 
         // ボタン
-        JPanel buttonPanel = new JPanel(new GridLayout(2, 1, 5, 5));
-        buttonPanel.setMaximumSize(new Dimension(200, 80));
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        buttonPanel.setBackground(CARD_COLOR);
 
-        trainButton = new JButton("Train Model");
-        trainButton.setIcon(UIManager.getIcon("FileView.computerIcon"));
-        trainButton.addActionListener(e -> toggleTraining());
-        buttonPanel.add(trainButton);
+        clearButton = createStyledButton("Clear", createIcon("✕", DANGER_COLOR));
+        clearButton.setBackground(CARD_COLOR);
+        clearButton.setForeground(DANGER_COLOR);
+        clearButton.setBorder(BorderFactory.createLineBorder(DANGER_COLOR, 2));
+        clearButton.addActionListener(e -> {
+            drawingPanel.clear();
+            predictionDisplay.clear();
+        });
 
-        evaluateButton = new JButton("Evaluate Model");
-        evaluateButton.setIcon(UIManager.getIcon("FileView.hardDriveIcon"));
-        evaluateButton.addActionListener(e -> evaluateModel());
-        buttonPanel.add(evaluateButton);
+        JButton generateButton = createStyledButton("Random", createIcon("↻", PRIMARY_COLOR));
+        generateButton.setBackground(CARD_COLOR);
+        generateButton.setForeground(PRIMARY_COLOR);
+        generateButton.setBorder(BorderFactory.createLineBorder(PRIMARY_COLOR, 2));
+        generateButton.addActionListener(e -> generateSample());
 
-        JPanel buttonContainer = new JPanel();
-        buttonContainer.add(buttonPanel);
-        panel.add(buttonContainer);
+        buttonPanel.add(clearButton);
+        buttonPanel.add(generateButton);
 
-        return panel;
+        card.add(buttonPanel, BorderLayout.SOUTH);
+
+        return card;
     }
 
-    /**
-     * ステータスパネルの作成
-     */
-    private JPanel createStatusPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+    private JPanel createPredictionCard() {
+        JPanel card = createCard("Prediction");
+        card.setLayout(new BorderLayout());
 
-        statusLabel = new JLabel("Ready - Draw a digit or train the model");
-        statusLabel.setFont(new Font("Arial", Font.PLAIN, 12));
-        panel.add(statusLabel, BorderLayout.WEST);
+        predictionDisplay = new Display();
+        card.add(predictionDisplay, BorderLayout.CENTER);
+
+        return card;
+    }
+
+    private JPanel createCard(String title) {
+        JPanel card = new JPanel();
+        card.setBackground(CARD_COLOR);
+        card.setBorder(BorderFactory.createCompoundBorder(
+                new RoundedBorder(15, CARD_COLOR),
+                BorderFactory.createEmptyBorder(20, 20, 20, 20)
+        ));
+        card.setLayout(new BorderLayout());
+
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(SUBTITLE_FONT);
+        titleLabel.setForeground(TEXT_COLOR);
+        titleLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 15, 0));
+        card.add(titleLabel, BorderLayout.NORTH);
+
+        return card;
+    }
+
+    private JPanel createFooter() {
+        JPanel footer = new JPanel(new BorderLayout());
+        footer.setBackground(BACKGROUND_COLOR);
+        footer.setBorder(BorderFactory.createEmptyBorder(0, 30, 20, 30));
+        footer.setPreferredSize(new Dimension(getWidth(), 60));
+
+        statusLabel = new JLabel("Ready to draw or train");
+        statusLabel.setFont(LABEL_FONT);
+        statusLabel.setForeground(SECONDARY_COLOR);
+        footer.add(statusLabel, BorderLayout.WEST);
 
         progressBar = new JProgressBar();
+        progressBar.setPreferredSize(new Dimension(300, 25));
+        progressBar.setBackground(BACKGROUND_COLOR);
+        progressBar.setForeground(PRIMARY_COLOR);
+        progressBar.setBorderPainted(false);
         progressBar.setStringPainted(true);
-        progressBar.setPreferredSize(new Dimension(300, 20));
-        panel.add(progressBar, BorderLayout.EAST);
+        footer.add(progressBar, BorderLayout.EAST);
 
-        return panel;
+        return footer;
     }
 
-    /**
-     * 描画が変更されたときの処理
-     */
+    private JButton createStyledButton(String text, Icon icon) {
+        JButton button = new JButton(text, icon);
+        button.setFont(BUTTON_FONT);
+        button.setFocusPainted(false);
+        button.setBorderPainted(true);
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setBackground(PRIMARY_COLOR);
+        button.setForeground(Color.WHITE);
+        button.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+
+        // ホバーエフェクト
+        button.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                button.setBackground(button.getBackground().darker());
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                button.setBackground(button.getBackground().brighter());
+            }
+        });
+
+        return button;
+    }
+
+    private Icon createIcon(String text, Color color) {
+        return new Icon() {
+            @Override
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(color);
+                g2.setFont(new Font("Arial", Font.BOLD, 16));
+                g2.drawString(text, x, y + 12);
+            }
+
+            @Override
+            public int getIconWidth() { return 20; }
+
+            @Override
+            public int getIconHeight() { return 16; }
+        };
+    }
+
     private void onDrawingChanged() {
-        if (!drawingPanel.hasDrawing()) {
-            return;
-        }
+        if (!drawingPanel.hasDrawing()) return;
 
-        // 28x28の画像を取得
         double[][] image = drawingPanel.getCurrentImage();
-
-        // 3Dテンソルに変換
         double[][][] input = new double[1][CNN.IMAGE_SIZE][CNN.IMAGE_SIZE];
         input[0] = image;
 
-        // 予測
         TrainingController.PredictionResult result = trainingController.predict(input);
-
-        // 結果を表示
-        predictionPanel.updatePrediction(result.predictedClass, result.probabilities);
+        predictionDisplay.updatePrediction(result.predictedClass, result.probabilities);
     }
 
-    /**
-     * サンプル数字を生成
-     */
-    private void generateSampleDigit() {
+    private void generateSample() {
         int digit = (int)(Math.random() * 10);
         double[][] sample = dataGenerator.generateDigit(digit, 0.05);
-
-        // 描画パネルに表示
         drawingPanel.setImage(sample);
-
-        statusLabel.setText("Generated sample digit: " + digit);
+        statusLabel.setText("Generated sample: " + digit);
     }
 
-    /**
-     * 学習の開始/停止を切り替え
-     */
     private void toggleTraining() {
         if (trainingController.isTraining()) {
             trainingController.stopTraining();
             trainButton.setText("Train Model");
+            trainButton.setIcon(createIcon("▶", Color.WHITE));
         } else {
             trainingController.startTraining();
             trainButton.setText("Stop Training");
-            evaluateButton.setEnabled(false);
+            trainButton.setIcon(createIcon("■", Color.WHITE));
         }
     }
 
     /**
-     * モデルを評価
+     * 角丸ボーダー
      */
-    private void evaluateModel() {
-        new Thread(() -> {
-            statusLabel.setText("Evaluating model...");
-            evaluateButton.setEnabled(false);
+    private static class RoundedBorder extends AbstractBorder {
+        private final int radius;
+        private final Color color;
 
-            TrainingController.EvaluationResult result = trainingController.evaluateDetailed();
-
-            SwingUtilities.invokeLater(() -> {
-                // 結果を表示
-                String message = String.format(
-                        "Overall Accuracy: %.2f%%\n\n" +
-                                "Per-class accuracy:\n%s",
-                        result.accuracy * 100,
-                        formatClassAccuracies(result.classAccuracies)
-                );
-
-                JOptionPane.showMessageDialog(this, message,
-                        "Evaluation Result", JOptionPane.INFORMATION_MESSAGE);
-
-                evaluateButton.setEnabled(true);
-            });
-        }).start();
-    }
-
-    /**
-     * クラスごとの精度をフォーマット
-     */
-    private String formatClassAccuracies(double[] accuracies) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < accuracies.length; i++) {
-            sb.append(String.format("Digit %d: %.2f%%\n", i, accuracies[i] * 100));
+        RoundedBorder(int radius, Color color) {
+            this.radius = radius;
+            this.color = color;
         }
-        return sb.toString();
-    }
 
-    // TrainingListener インターフェースの実装
-    @Override
-    public void onStatusChanged(String status) {
-        statusLabel.setText(status);
-    }
+        @Override
+        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+            Graphics2D g2 = (Graphics2D) g;
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color);
+            g2.drawRoundRect(x, y, width - 1, height - 1, radius, radius);
+        }
 
-    @Override
-    public void onProgressChanged(int progress) {
-        progressBar.setValue(progress);
-    }
-
-    @Override
-    public void onEpochCompleted(int epoch, double loss) {
-        predictionPanel.addTrainingHistory(epoch, loss);
-    }
-
-    @Override
-    public void onAccuracyUpdated(double accuracy) {
-        predictionPanel.updateAccuracy(accuracy);
-    }
-
-    @Override
-    public void onTrainingCompleted() {
-        trainButton.setText("Train Model");
-        evaluateButton.setEnabled(true);
-        statusLabel.setText("Training completed");
-        progressBar.setValue(100);
-    }
-
-    @Override
-    public void onError(String error) {
-        JOptionPane.showMessageDialog(this, error, "Training Error", JOptionPane.ERROR_MESSAGE);
-        trainButton.setText("Train Model");
-        evaluateButton.setEnabled(true);
+        @Override
+        public Insets getBorderInsets(Component c) {
+            return new Insets(radius/2, radius/2, radius/2, radius/2);
+        }
     }
 }

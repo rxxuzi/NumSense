@@ -1,18 +1,18 @@
 package main;
 
 import ui.GUI;
-
 import javax.swing.*;
 
 public class Main {
 
     private final GUI gui;
+
     public Main() {
         this.gui = new GUI();
     }
 
     public void launch() {
-        // システムのルックアンドフィールを使用
+        // システムのルックアンドフィールを設定
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception e) {
