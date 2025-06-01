@@ -1,13 +1,14 @@
 package ui;
 
-import main.CNN;
 import models.ImprovedCNN;
+import models.ModelSerializer;
 import data.MINIST;
 import javax.swing.*;
 import java.util.Random;
+import java.io.File;
 
 /**
- * CNNモデルの学習を制御するクラス
+ * CNNモデルの学習を制御するクラス（完全版）
  */
 public class TrainingController {
 
@@ -31,14 +32,17 @@ public class TrainingController {
 
     /**
      * 学習進捗リスナーインターフェース
+     * GUIやコンソールなど、様々な場所から学習の進捗を監視できる
      */
     public interface TrainingListener {
-        void onStatusChanged(String status);
-        void onProgressChanged(int progress);
-        void onEpochCompleted(int epoch, double loss);
-        void onAccuracyUpdated(double accuracy);
-        void onTrainingCompleted();
-        void onError(String error);
+        void onStatusChanged(String status);           // ステータスメッセージが変更されたとき
+        void onProgressChanged(int progress);          // 進捗率が変更されたとき（0-100）
+        void onEpochCompleted(int epoch, double loss); // エポックが完了したとき
+        void onAccuracyUpdated(double accuracy);       // 精度が更新されたとき
+        void onTrainingCompleted();                    // 学習が完了したとき
+        void onError(String error);                    // エラーが発生したとき
+        void onModelSaved(String filepath);            // モデルが保存されたとき
+        void onModelLoaded(String filepath);           // モデルが読み込まれたとき
     }
 
     /**
@@ -141,6 +145,12 @@ public class TrainingController {
             notifyError("Training error: " + e.getMessage());
             e.printStackTrace();
         } finally {
+            // 学習完了後に自動保存
+            if (!stopRequested) {
+                notifyStatus("Saving model...");
+                saveModel("./outputs/cnn.jnn");
+            }
+
             isTraining = false;
             notifyTrainingCompleted();
         }
@@ -151,7 +161,7 @@ public class TrainingController {
      */
     private TrainingData generateTrainingData() {
         int trainSize = 6000;
-        double[][][][] images = new double[trainSize][1][CNN.IMAGE_SIZE][CNN.IMAGE_SIZE];
+        double[][][][] images = new double[trainSize][1][32][32];  // 32x32画像
         int[] labels = new int[trainSize];
 
         // 各数字を均等に生成
@@ -179,6 +189,10 @@ public class TrainingController {
         for (int batch = 0; batch < numBatches && !stopRequested; batch++) {
             double batchLoss = trainBatch(data, batch, augmentRand, epochIndex);
             epochLoss += batchLoss;
+
+            // バッチごとの進捗更新
+            int currentProgress = ((epochIndex * numBatches + batch) * 100) / (epochs * numBatches);
+            notifyProgress(currentProgress);
         }
 
         return epochLoss / numBatches;
@@ -213,7 +227,7 @@ public class TrainingController {
     public double evaluateModel() {
         // テストデータの生成
         int testSize = 1000;
-        double[][][][] testImages = new double[testSize][1][28][28];
+        double[][][][] testImages = new double[testSize][1][32][32];
         int[] testLabels = new int[testSize];
 
         for (int i = 0; i < testSize; i++) {
@@ -242,7 +256,7 @@ public class TrainingController {
      */
     public EvaluationResult evaluateDetailed() {
         int testSize = 1000;
-        double[][][][] testImages = new double[testSize][1][28][28];
+        double[][][][] testImages = new double[testSize][1][32][32];
         int[] testLabels = new int[testSize];
         int[][] confusionMatrix = new int[10][10];
 
@@ -289,6 +303,50 @@ public class TrainingController {
     }
 
     /**
+     * モデルを保存
+     */
+    public void saveModel(String filepath) {
+        try {
+            ModelSerializer.saveModel(model, filepath);
+            if (listener != null) {
+                SwingUtilities.invokeLater(() -> listener.onModelSaved(filepath));
+            }
+        } catch (Exception e) {
+            notifyError("Failed to save model: " + e.getMessage());
+        }
+    }
+
+    /**
+     * モデルを読み込み
+     */
+    public void loadModel(String filepath) {
+        try {
+            File file = new File(filepath);
+            if (!file.exists()) {
+                notifyError("Model file not found: " + filepath);
+                return;
+            }
+
+            model = ModelSerializer.loadModel(filepath);
+            if (listener != null) {
+                SwingUtilities.invokeLater(() -> listener.onModelLoaded(filepath));
+            }
+
+            // 読み込み後に評価
+            evaluateModel();
+        } catch (Exception e) {
+            notifyError("Failed to load model: " + e.getMessage());
+        }
+    }
+
+    /**
+     * モデルファイルが存在するか確認
+     */
+    public boolean modelFileExists(String filepath) {
+        return new File(filepath).exists();
+    }
+
+    /**
      * データのシャッフル
      */
     private void shuffleData(double[][][][] images, int[] labels) {
@@ -308,7 +366,8 @@ public class TrainingController {
         }
     }
 
-    // 通知メソッド
+    // ========== 通知メソッド（リスナーパターンの実装） ==========
+
     private void notifyStatus(String status) {
         if (listener != null) {
             SwingUtilities.invokeLater(() -> listener.onStatusChanged(status));
@@ -345,7 +404,20 @@ public class TrainingController {
         }
     }
 
-    // 内部クラス
+    private void notifyModelSaved(String filepath) {
+        if (listener != null) {
+            SwingUtilities.invokeLater(() -> listener.onModelSaved(filepath));
+        }
+    }
+
+    private void notifyModelLoaded(String filepath) {
+        if (listener != null) {
+            SwingUtilities.invokeLater(() -> listener.onModelLoaded(filepath));
+        }
+    }
+
+    // ========== 内部クラス ==========
+
     private static class TrainingData {
         final double[][][][] images;
         final int[] labels;

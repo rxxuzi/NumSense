@@ -7,9 +7,6 @@ import java.awt.*;
 import java.awt.event.*;
 import javax.swing.border.*;
 
-/**
- * モダンでシンプルなCNN手書き数字認識GUI
- */
 public class GUI extends JFrame {
 
     // カラーパレット
@@ -34,6 +31,8 @@ public class GUI extends JFrame {
     private Display predictionDisplay;
     private JButton clearButton;
     private JButton trainButton;
+    private JButton saveModelButton;
+    private JButton loadModelButton;
     private JProgressBar progressBar;
     private JLabel statusLabel;
     private JLabel epochLabel;
@@ -48,7 +47,7 @@ public class GUI extends JFrame {
     private MINIST dataGenerator;
 
     public GUI() {
-        super("Digit Recognition");
+        super("Num Sense");
         initializeComponents();
         setupUI();
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -68,6 +67,7 @@ public class GUI extends JFrame {
             @Override
             public void onProgressChanged(int progress) {
                 progressBar.setValue(progress);
+                progressBar.setString(progress + "%");
             }
 
             @Override
@@ -85,18 +85,54 @@ public class GUI extends JFrame {
             @Override
             public void onAccuracyUpdated(double accuracy) {
                 predictionDisplay.updateAccuracy(accuracy);
+                String accuracyText = String.format("Accuracy: %.1f%%", accuracy * 100);
+                statusLabel.setText(accuracyText);
             }
 
             @Override
             public void onTrainingCompleted() {
                 trainButton.setText("Train Model");
+                trainButton.setEnabled(true);
                 progressBar.setValue(0);
                 statusLabel.setText("Training completed!");
+
+                java.awt.Toolkit.getDefaultToolkit().beep();
+
+                JOptionPane.showMessageDialog(GUI.this,
+                        "Training completed successfully!",
+                        "Success",
+                        JOptionPane.INFORMATION_MESSAGE);
             }
 
             @Override
             public void onError(String error) {
                 JOptionPane.showMessageDialog(GUI.this, error, "Error", JOptionPane.ERROR_MESSAGE);
+                trainButton.setText("Train Model");
+                trainButton.setEnabled(true);
+                progressBar.setValue(0);
+                statusLabel.setText("Error: " + error);
+            }
+
+            @Override
+            public void onModelSaved(String filepath) {
+                statusLabel.setText("Model saved: " + filepath);
+                historyArea.append("Model saved to: " + filepath + "\n");
+
+                JOptionPane.showMessageDialog(GUI.this,
+                        "Model saved successfully to:\n" + filepath,
+                        "Model Saved",
+                        JOptionPane.INFORMATION_MESSAGE);
+            }
+
+            @Override
+            public void onModelLoaded(String filepath) {
+                statusLabel.setText("Model loaded: " + filepath);
+                historyArea.append("Model loaded from: " + filepath + "\n");
+
+                JOptionPane.showMessageDialog(GUI.this,
+                        "Model loaded successfully from:\n" + filepath,
+                        "Model Loaded",
+                        JOptionPane.INFORMATION_MESSAGE);
             }
         });
 
@@ -124,17 +160,81 @@ public class GUI extends JFrame {
         header.setLayout(new BorderLayout());
         header.setBorder(BorderFactory.createEmptyBorder(20, 30, 20, 30));
 
-        JLabel titleLabel = new JLabel("Digit Recognition");
+        JLabel titleLabel = new JLabel("Num Sense");
         titleLabel.setFont(TITLE_FONT);
         titleLabel.setForeground(Color.WHITE);
         header.add(titleLabel, BorderLayout.WEST);
 
+        // ボタンパネル
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        buttonPanel.setBackground(PRIMARY_COLOR);
+
+        // モデルの保存・読み込みボタン
+        saveModelButton = createStyledButton("Save Model", null);
+        saveModelButton.setBackground(new Color(52, 168, 235));
+        saveModelButton.addActionListener(e -> saveModel());
+
+        loadModelButton = createStyledButton("Load Model", null);
+        loadModelButton.setBackground(new Color(255, 159, 67));
+        loadModelButton.addActionListener(e -> loadModel());
+
         trainButton = createStyledButton("Train Model", null);
         trainButton.setBackground(SUCCESS_COLOR);
         trainButton.addActionListener(e -> toggleTraining());
-        header.add(trainButton, BorderLayout.EAST);
+
+        buttonPanel.add(loadModelButton);
+        buttonPanel.add(saveModelButton);
+        buttonPanel.add(trainButton);
+
+        header.add(buttonPanel, BorderLayout.EAST);
+
+        // 初回起動時にモデルファイルをチェック
+        checkAndLoadModel();
 
         return header;
+    }
+
+    /**
+     * 初回起動時にモデルファイルの存在をチェック
+     */
+    private void checkAndLoadModel() {
+        String filepath = "./outputs/cnn.jnn";
+        if (trainingController.modelFileExists(filepath)) {
+            int result = JOptionPane.showConfirmDialog(this,
+                    "Pre-trained model found!\nDo you want to load it?",
+                    "Load Model",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.QUESTION_MESSAGE);
+
+            if (result == JOptionPane.YES_OPTION) {
+                SwingUtilities.invokeLater(() -> loadModel());
+            }
+        }
+    }
+
+    private void saveModel() {
+        if (trainingController.getModel() == null) {
+            JOptionPane.showMessageDialog(this,
+                    "No model to save. Please train the model first.",
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        String filepath = "./outputs/cnn.jnn";
+        trainingController.saveModel(filepath);
+    }
+
+    private void loadModel() {
+        String filepath = "./outputs/cnn.jnn";
+        if (!trainingController.modelFileExists(filepath)) {
+            JOptionPane.showMessageDialog(this,
+                    "Model file not found: " + filepath + "\nPlease train the model first.",
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        trainingController.loadModel(filepath);
+        statusLabel.setText("Model loaded successfully!");
     }
 
     private JPanel createMainContent() {
